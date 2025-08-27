@@ -1,0 +1,33 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+*.out
+*.err
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+docker-compose.override.yml
+*.pid
+*.seed
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Database dumps
+*.sql
+*.sqlite
