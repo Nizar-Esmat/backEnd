@@ -1,4 +1,4 @@
-const { Message, User, Conversation } = require('../models');
+const { Message, User, Conversation, ConversationMember } = require('../models');
 const authenticateSocket = require('../middleware/socketAuth');
 
 const chatController = (io) => {
@@ -7,6 +7,77 @@ const chatController = (io) => {
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}, UserId: ${socket.userId}`);
+    
+    // Create a new conversation
+    socket.on('create_conversation', async (data) => {
+      try {
+        const { participantIds, conversationName } = data;
+        const creatorId = socket.userId;
+        
+        // Include creator in participants if not already included
+        const allParticipants = participantIds.includes(creatorId) 
+          ? participantIds 
+          : [creatorId, ...participantIds];
+        
+        // Create the conversation
+        const newConversation = await Conversation.create({
+          name: conversationName || null
+        });
+        
+        // Add all participants to the conversation
+        const conversationMembers = allParticipants.map(userId => ({
+          conversationId: newConversation.id,
+          userId: userId
+        }));
+        
+        await ConversationMember.bulkCreate(conversationMembers);
+        
+        // Get conversation with participants info
+        const conversationWithParticipants = await Conversation.findByPk(newConversation.id, {
+          include: [{
+            model: User,
+            attributes: ['id', 'username', 'avatarUrl']
+          }]
+        });
+        
+        // Auto-join the creator to the conversation room
+        socket.join(newConversation.id.toString());
+        
+        socket.emit('conversation_create_success', {
+          conversation: conversationWithParticipants
+        });
+        
+        console.log(`Conversation ${newConversation.id} created by user ${creatorId}`);
+        
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        socket.emit('conversation_create_error', { error: 'Failed to create conversation' });
+      }
+    });
+    
+    // Get user's conversations
+    socket.on('get_user_conversations', async () => {
+      try {
+        const userId = socket.userId;
+        
+        const conversations = await Conversation.findAll({
+          include: [{
+            model: User,
+            through: { attributes: [] }, // Exclude junction table attributes
+            attributes: ['id', 'username', 'avatarUrl']
+          }],
+          where: {
+            '$Users.id$': userId
+          }
+        });
+        
+        socket.emit('user_conversations', { conversations });
+        
+      } catch (error) {
+        console.error('Error getting user conversations:', error);
+        socket.emit('error', { message: 'Failed to get conversations' });
+      }
+    });
 
     // Join a conversation room
     socket.on('join_conversation', async (conversationId) => {
